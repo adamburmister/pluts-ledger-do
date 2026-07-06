@@ -1,4 +1,4 @@
-# Ledger
+# Pluts Ledger Durable Object
 
 This is a simple demo implementation of a Cloudflare Worker using the [pluts](https://github.com/adamburmister/pluts) package.
 

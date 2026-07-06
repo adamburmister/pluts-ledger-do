@@ -1,0 +1,175 @@
+# Ledger
+
+A Cloudflare Worker that exposes a JSON API for a double-entry accounting ledger.
+
+Ledger runs [pluts](https://github.com/adamburmister/pluts) inside a Cloudflare Durable Object. The Durable Object owns its embedded SQLite database, runs the ledger schema migration on startup, and serializes writes through a single named instance.
+
+## Features
+
+- Double-entry bookkeeping with Asset, Liability, Equity, Revenue, and Expense accounts
+- Balanced journal entries with exact minor-unit amount storage
+- Durable Object SQLite persistence, with no separate D1 database required
+- Idempotent entry posting through optional `idempotencyKey` values
+- Demo seed data for a small retail business
+- Simple JSON REST surface for local development and deployment on Cloudflare Workers
+
+## Architecture
+
+The outer Worker forwards every request to one Durable Object instance named `ledger`:
+
+```text
+HTTP request -> Worker -> PlutsLedgerDO("ledger") -> DO SQLite storage
+```
+
+`PlutsLedgerDO` calls `migrate(ctx.storage.sql)` during construction, so each Durable Object instance provisions its own schema before serving requests. The Worker currently uses one shared instance, which means the deployed service represents one isolated ledger.
+
+## API
+
+| Method | Path | Description |
+| --- | --- | --- |
+| `POST` | `/accounts` | Create an account |
+| `GET` | `/accounts` | List accounts with balances |
+| `POST` | `/entries` | Post a balanced journal entry |
+| `GET` | `/entries` | List entries, newest first |
+| `GET` | `/trial-balance` | Return the current trial balance |
+| `POST` | `/seed` | Seed the Harbor Goods demo ledger |
+
+Validation errors return `400` with `{ "error": "...", "issues": [...] }`.
+
+## Getting Started
+
+Install dependencies:
+
+```sh
+npm install
+```
+
+Start the local Worker:
+
+```sh
+npm run dev
+```
+
+Wrangler prints the local URL, usually `http://localhost:8787`.
+
+Seed the demo ledger:
+
+```sh
+curl -X POST http://localhost:8787/seed
+```
+
+Check that debits and credits balance:
+
+```sh
+curl http://localhost:8787/trial-balance
+```
+
+A balanced ledger returns:
+
+```json
+{ "balance": "0.00" }
+```
+
+## Example Requests
+
+Create accounts:
+
+```sh
+curl -X POST http://localhost:8787/accounts \
+  -H "content-type: application/json" \
+  -d '{"name":"Cash","type":"Asset"}'
+
+curl -X POST http://localhost:8787/accounts \
+  -H "content-type: application/json" \
+  -d '{"name":"Sales Revenue","type":"Revenue"}'
+```
+
+Post a balanced entry:
+
+```sh
+curl -X POST http://localhost:8787/entries \
+  -H "content-type: application/json" \
+  -d '{
+    "idempotencyKey": "sale-001",
+    "description": "Sold goods for cash",
+    "date": "2026-07-06",
+    "debits": [{ "accountName": "Cash", "amount": "125.00" }],
+    "credits": [{ "accountName": "Sales Revenue", "amount": "125.00" }]
+  }'
+```
+
+List accounts and balances:
+
+```sh
+curl http://localhost:8787/accounts
+```
+
+List entries:
+
+```sh
+curl http://localhost:8787/entries
+```
+
+## Request Shapes
+
+Account creation:
+
+```json
+{
+  "name": "Cash",
+  "type": "Asset",
+  "contra": false
+}
+```
+
+Valid account types are `Asset`, `Liability`, `Equity`, `Revenue`, and `Expense`. `contra` is optional and defaults to `false`.
+
+Journal entry posting:
+
+```json
+{
+  "idempotencyKey": "unique-entry-key",
+  "description": "Entry description",
+  "date": "2026-07-06",
+  "debits": [{ "accountName": "Cash", "amount": "10.00" }],
+  "credits": [{ "accountName": "Sales Revenue", "amount": "10.00" }]
+}
+```
+
+`idempotencyKey` and `date` are optional. Amounts may be numbers or decimal strings. Every entry must include at least one debit, at least one credit, and equal debit and credit totals.
+
+## Development
+
+Useful scripts:
+
+```sh
+npm run dev       # Start Wrangler dev server
+npm run deploy    # Deploy to Cloudflare
+npm run typecheck # Run TypeScript without emitting files
+npm run cf-typegen # Regenerate Worker binding types
+```
+
+Regenerate Worker types after changing Durable Object bindings or other Wrangler configuration:
+
+```sh
+npm run cf-typegen
+```
+
+## Deployment
+
+Deploy with Wrangler:
+
+```sh
+npm run deploy
+```
+
+The deployed Worker name and Durable Object binding are configured in `wrangler.jsonc`.
+
+## Project Layout
+
+```text
+src/index.ts     Worker entrypoint and Durable Object implementation
+src/seed.ts      Harbor Goods demo data
+wrangler.jsonc   Cloudflare Worker and Durable Object configuration
+package.json     npm scripts and dependencies
+```

@@ -1,7 +1,6 @@
 import { DurableObject } from 'cloudflare:workers';
-import { formatAmount, Ledger, migrate, SqlStorageRepository, ValidationError } from 'pluts';
+import { formatAmount, Ledger, migrate, SqlStorageRepository, ValidationError, createAccountSchema, entryInputSchema } from 'pluts';
 import { seed } from './seed';
-import type { CreateAccountInput, EntryInput } from 'pluts';
 
 /**
  * Ledger Durable Object — a single-writer coordinator backed by its own
@@ -49,7 +48,8 @@ export class PlutsLedgerDO extends DurableObject<Env> {
 
 		try {
 			if (request.method === 'POST' && url.pathname === '/accounts') {
-				const account = await ledger.createAccount((await request.json()) as CreateAccountInput);
+				const accountData = await createAccountSchema.parse(await request.json());
+				const account = await ledger.createAccount(accountData);
 				return Response.json(account);
 			}
 
@@ -65,7 +65,8 @@ export class PlutsLedgerDO extends DurableObject<Env> {
 			}
 
 			if (request.method === 'POST' && url.pathname === '/entries') {
-				const entry = await ledger.postEntry((await request.json()) as EntryInput);
+				const entryData = await entryInputSchema.parse(await request.json());
+				const entry = await ledger.postEntry(entryData);
 				return Response.json(entry);
 			}
 
@@ -103,11 +104,9 @@ export class PlutsLedgerDO extends DurableObject<Env> {
 }
 
 export default {
-	/**
-	 * Forward every request to the single Ledger Durable Object instance named
-	 * "ledger". The DO owns the schema, its SQLite storage, and all writes.
-	 */
 	async fetch(request: Request, env: Env): Promise<Response> {
+		// In practice you would probably use a per-tenant DO instance,
+		// but for this demo we just use a single DO named "ledger".
 		const stub = env.PLUTS_LEDGER_DO.getByName('ledger');
 		return stub.fetch(request);
 	},

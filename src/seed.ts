@@ -16,7 +16,6 @@ interface SeedEntry {
 	idempotencyKey: string;
 	description: string;
 	date: string;
-	commercialDocument?: { id: string; type: string };
 	debits: SeedAmountLine[];
 	credits: SeedAmountLine[];
 }
@@ -53,7 +52,6 @@ const SEED_ENTRIES: SeedEntry[] = [
 		idempotencyKey: 'seed-02-equipment',
 		description: 'Purchase store equipment and fixtures',
 		date: '2026-06-02',
-		commercialDocument: { id: 'INV-1001', type: 'Invoice' },
 		debits: [{ accountName: 'Equipment', amount: 5000 }],
 		credits: [{ accountName: 'Checking Account', amount: 5000 }],
 	},
@@ -61,7 +59,6 @@ const SEED_ENTRIES: SeedEntry[] = [
 		idempotencyKey: 'seed-03-inventory',
 		description: 'Buy initial inventory on credit from supplier',
 		date: '2026-06-03',
-		commercialDocument: { id: 'PO-2001', type: 'PurchaseOrder' },
 		debits: [{ accountName: 'Inventory', amount: 8000 }],
 		credits: [{ accountName: 'Accounts Payable', amount: 8000 }],
 	},
@@ -93,7 +90,6 @@ const SEED_ENTRIES: SeedEntry[] = [
 		idempotencyKey: 'seed-07-pay-supplier',
 		description: 'Partial payment to inventory supplier',
 		date: '2026-06-18',
-		commercialDocument: { id: 'INV-1001', type: 'Invoice' },
 		debits: [{ accountName: 'Accounts Payable', amount: 4000 }],
 		credits: [{ accountName: 'Checking Account', amount: 4000 }],
 	},
@@ -115,7 +111,6 @@ const SEED_ENTRIES: SeedEntry[] = [
 		idempotencyKey: 'seed-10-credit-sale',
 		description: 'Sale on credit to a wholesale customer (incl. 10% sales tax)',
 		date: '2026-06-25',
-		commercialDocument: { id: 'INV-1002', type: 'Invoice' },
 		debits: [{ accountName: 'Accounts Receivable', amount: 2200 }],
 		credits: [
 			{ accountName: 'Sales Revenue', amount: 2000 },

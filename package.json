@@ -1,21 +1,26 @@
 {
-	"name": "ledger",
-	"version": "0.0.0",
-	"private": true,
-	"scripts": {
-		"deploy": "wrangler deploy",
-		"dev": "wrangler dev",
-		"start": "wrangler dev",
-		"cf-typegen": "wrangler types",
-		"typecheck": "tsc --noEmit"
-	},
-	"devDependencies": {
-		"@cloudflare/workers-types": "^4.20250101.0",
-		"typescript": "^5.5.2",
-		"wrangler": "^4.107.0"
-	},
-	"dependencies": {
-		"pluts": "github:adamburmister/pluts#main",
-		"zod": "^4.4.3"
-	}
+  "name": "pluts-ledger-do",
+  "version": "0.1.0",
+  "license": "MIT",
+  "scripts": {
+    "deploy": "wrangler deploy",
+    "dev": "wrangler dev",
+    "start": "wrangler dev",
+    "cf-typegen": "wrangler types",
+    "typecheck": "tsc --noEmit",
+    "lint": "biome check src",
+    "format": "biome format --write src"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "2.5.2",
+    "@cloudflare/workers-types": "^4.20250101.0",
+    "typescript": "^5.5.2",
+    "wrangler": "^4.107.0"
+  },
+  "dependencies": {
+    "node-addon-api": "^8.9.0",
+    "node-gyp": "^12.4.0",
+    "pluts": "github:adamburmister/pluts#main",
+    "zod": "^4.4.3"
+  }
 }

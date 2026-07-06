@@ -5,18 +5,18 @@
 	"migrations": [
 		{
 			"new_sqlite_classes": ["PlutsLedgerDO"],
-			"tag": "v1",
-		},
+			"tag": "v1"
+		}
 	],
 	"durable_objects": {
 		"bindings": [
 			{
 				"class_name": "PlutsLedgerDO",
-				"name": "PLUTS_LEDGER_DO",
-			},
-		],
+				"name": "PLUTS_LEDGER_DO"
+			}
+		]
 	},
 	"observability": {
-		"enabled": true,
-	},
+		"enabled": true
+	}
 }

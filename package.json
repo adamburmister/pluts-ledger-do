@@ -7,8 +7,7 @@
 		"dev": "wrangler dev",
 		"start": "wrangler dev",
 		"cf-typegen": "wrangler types",
-		"typecheck": "tsc --noEmit",
-		"seed": "bun run scripts/seed-demo.ts"
+		"typecheck": "tsc --noEmit"
 	},
 	"devDependencies": {
 		"@cloudflare/workers-types": "^4.20250101.0",

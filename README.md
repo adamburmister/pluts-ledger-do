@@ -1,8 +1,10 @@
 # Ledger
 
-A Cloudflare Worker that exposes a JSON API for a double-entry accounting ledger.
+This is a simple demo implementation of a Cloudflare Worker using the [pluts](https://github.com/adamburmister/pluts) package.
 
-Ledger runs [pluts](https://github.com/adamburmister/pluts) inside a Cloudflare Durable Object. The Durable Object owns its embedded SQLite database, runs the ledger schema migration on startup, and serializes writes through a single named instance.
+It exposes a single-tenant JSON API for a double-entry accounting ledger via a Cloudflare Worker and Durable Object.
+
+The Durable Object owns its embedded SQLite database (making it easy to extend this demo to be multi-tenant), runs the ledger schema migration on startup, and serializes writes through a named instance.
 
 ## Features
 

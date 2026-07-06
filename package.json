@@ -16,9 +16,6 @@
 		"wrangler": "^4.107.0"
 	},
 	"dependencies": {
-		"node-addon-api": "^8.9.0",
-		"node-gyp": "^12.4.0",
-		"pluts": "file:../pluts",
-		"zod": "^4.4.3"
+		"pluts": "github:adamburmister/pluts#main"
 	}
 }

@@ -1,12 +1,12 @@
 import { DurableObject } from "cloudflare:workers";
 import {
-	formatAmount,
-	Ledger,
-	migrate,
-	SqlStorageRepository,
-	ValidationError,
-	createAccountSchema,
-	entryInputSchema,
+  formatAmount,
+  Ledger,
+  migrate,
+  SqlStorageRepository,
+  ValidationError,
+  createAccountSchema,
+  entryInputSchema,
 } from "pluts";
 import { seed } from "./seed";
 
@@ -32,97 +32,110 @@ import { seed } from "./seed";
  *   POST /seed             seed the Harbor Goods demo data (idempotent)
  */
 export class PlutsLedgerDO extends DurableObject<Env> {
-	/**
-	 * Provision the schema before any request is served. `ctx.storage.sql` is
-	 * synchronous, local SQLite, so running migrations here (under
-	 * `blockConcurrencyWhile`) is the recommended DO pattern and avoids a
-	 * per-request migration check. Idempotent — a warm DB is a no-op.
-	 */
-	constructor(ctx: DurableObjectState, env: Env) {
-		super(ctx, env);
-		ctx.blockConcurrencyWhile(() => {
-			migrate(ctx.storage.sql);
-			return Promise.resolve();
-		});
-	}
+  /**
+   * Provision the schema before any request is served. `ctx.storage.sql` is
+   * synchronous, local SQLite, so running migrations here (under
+   * `blockConcurrencyWhile`) is the recommended DO pattern and avoids a
+   * per-request migration check. Idempotent — a warm DB is a no-op.
+   */
+  constructor(ctx: DurableObjectState, env: Env) {
+    super(ctx, env);
+    ctx.blockConcurrencyWhile(() => {
+      migrate(ctx.storage.sql);
+      return Promise.resolve();
+    });
+  }
 
-	private ledger(): Ledger {
-		return new Ledger(new SqlStorageRepository(this.ctx.storage));
-	}
+  private ledger(): Ledger {
+    return new Ledger(new SqlStorageRepository(this.ctx.storage));
+  }
 
-	async fetch(request: Request): Promise<Response> {
-		const ledger = this.ledger();
-		const url = new URL(request.url);
+  async fetch(request: Request): Promise<Response> {
+    const ledger = this.ledger();
+    const url = new URL(request.url);
 
-		try {
-			if (request.method === "POST" && url.pathname === "/accounts") {
-				const accountData = await createAccountSchema.parse(
-					await request.json(),
-				);
-				const account = await ledger.createAccount(accountData);
-				return Response.json(account);
-			}
+    try {
+      if (request.method === "POST" && url.pathname === "/accounts") {
+        const accountData = await createAccountSchema.parse(
+          await request.json(),
+        );
+        const account = await ledger.createAccount(accountData);
+        return Response.json(account);
+      }
 
-			if (request.method === "GET" && url.pathname === "/accounts") {
-				const accounts = await ledger.allAccounts();
-				const withBalances = await Promise.all(
-					accounts.map(async (a) => ({
-						...a,
-						balance: formatAmount(await ledger.accountBalance(a)),
-					})),
-				);
-				return Response.json(withBalances);
-			}
+      if (request.method === "GET" && url.pathname === "/accounts") {
+        const accounts = await ledger.allAccounts();
+        const withBalances = await Promise.all(
+          accounts.map(async (a) => ({
+            ...a,
+            balance: formatAmount(await ledger.accountBalance(a)),
+          })),
+        );
+        return Response.json(withBalances);
+      }
 
-			if (request.method === "POST" && url.pathname === "/entries") {
-				const entryData = await entryInputSchema.parse(await request.json());
-				const entry = await ledger.postEntry(entryData);
-				return Response.json(entry);
-			}
+      if (request.method === "POST" && url.pathname === "/entries") {
+        const entryData = await entryInputSchema.parse(await request.json());
+        const entry = await ledger.postEntry(entryData);
+        return Response.json(entry);
+      }
 
-			if (request.method === "GET" && url.pathname === "/entries") {
-				const entries = await ledger.allEntries("desc");
-				return Response.json(entries);
-			}
+      if (request.method === "GET" && url.pathname === "/entries") {
+        const entries = await ledger.allEntries("desc");
+        const withAmounts = await Promise.all(
+          entries.map(async (e) => ({
+            ...e,
+            debitAmounts: e.debitAmounts.map(async (d) => ({
+              ...d,
+              amount: d.amount.toMajor(),
+            })),
+            creditAmounts: e.creditAmounts.map(async (c) => ({
+              ...c,
+              amount: c.amount.toMajor(),
+            })),
+          })),
+        );
+        return Response.json(withAmounts);
+      }
 
-			if (request.method === "GET" && url.pathname === "/trial-balance") {
-				return Response.json({
-					balance: formatAmount(await ledger.trialBalance()),
-				});
-			}
+      if (request.method === "GET" && url.pathname === "/trial-balance") {
+        return Response.json({
+          balance: formatAmount(await ledger.trialBalance()),
+        });
+      }
 
-			if (request.method === "POST" && url.pathname === "/seed") {
-				return Response.json(await seed(ledger));
-			}
+      if (request.method === "POST" && url.pathname === "/seed") {
+        return Response.json(await seed(ledger));
+      }
 
-			return new Response("Not Found", { status: 404 });
-		} catch (e) {
-			if (e instanceof ValidationError) {
-				return Response.json(
-					{ error: e.message, issues: e.issues },
-					{ status: 400 },
-				);
-			}
-			const message = e instanceof Error ? e.message : String(e);
-			return Response.json({ error: message }, { status: 500 });
-		}
-	}
+      return new Response("Not Found", { status: 404 });
+    } catch (e) {
+      if (e instanceof ValidationError) {
+        return Response.json(
+          { error: e.message, issues: e.issues },
+          { status: 400 },
+        );
+      }
+      const message = e instanceof Error ? e.message : String(e);
+      return Response.json({ error: message }, { status: 500 });
+    }
+  }
 
-	/**
-	 * Clears all storage associated with this Durable Object instance — the
-	 * embedded SQLite database (schema + all rows) and any key-value data.
-	 * Useful for resetting a ledger during development.
-	 */
-	async clearDo(): Promise<void> {
-		await this.ctx.storage.deleteAll();
-	}
+  /**
+   * Clears all storage associated with this Durable Object instance — the
+   * embedded SQLite database (schema + all rows) and any key-value data.
+   * Useful for resetting a ledger during development.
+   */
+  async clearDo(): Promise<void> {
+    await this.ctx.storage.deleteAll();
+  }
 }
 
 export default {
-	async fetch(request: Request, env: Env): Promise<Response> {
-		// In practice you would probably use a per-tenant DO instance,
-		// but for this demo we just use a single DO named "ledger".
-		const stub = env.PLUTS_LEDGER_DO.getByName("ledger");
-		return stub.fetch(request);
-	},
+  async fetch(request: Request, env: Env): Promise<Response> {
+    // In practice you would probably use a per-tenant DO instance,
+    // but for this demo we just use a single DO named "ledger".
+    const stub = env.PLUTS_LEDGER_DO.getByName("ledger");
+    return stub.fetch(request);
+  },
 } satisfies ExportedHandler<Env>;

@@ -15,24 +15,24 @@ Ledger runs [pluts](https://github.com/adamburmister/pluts) inside a Cloudflare 
 
 ## Architecture
 
-The outer Worker forwards every request to one Durable Object instance named `ledger`:
+The outer Worker forwards every request to a Durable Object instance:
 
 ```text
-HTTP request -> Worker -> PlutsLedgerDO("ledger") -> DO SQLite storage
+HTTP request -> Worker -> PlutsLedgerDO("ledgerId") -> DO SQLite storage
 ```
 
 `PlutsLedgerDO` calls `migrate(ctx.storage.sql)` during construction, so each Durable Object instance provisions its own schema before serving requests. The Worker currently uses one shared instance, which means the deployed service represents one isolated ledger.
 
 ## API
 
-| Method | Path | Description |
-| --- | --- | --- |
-| `POST` | `/accounts` | Create an account |
-| `GET` | `/accounts` | List accounts with balances |
-| `POST` | `/entries` | Post a balanced journal entry |
-| `GET` | `/entries` | List entries, newest first |
-| `GET` | `/trial-balance` | Return the current trial balance |
-| `POST` | `/seed` | Seed the Harbor Goods demo ledger |
+| Method | Path             | Description                       |
+| ------ | ---------------- | --------------------------------- |
+| `POST` | `/accounts`      | Create an account                 |
+| `GET`  | `/accounts`      | List accounts with balances       |
+| `POST` | `/entries`       | Post a balanced journal entry     |
+| `GET`  | `/entries`       | List entries, newest first        |
+| `GET`  | `/trial-balance` | Return the current trial balance  |
+| `POST` | `/seed`          | Seed the Harbor Goods demo ledger |
 
 Validation errors return `400` with `{ "error": "...", "issues": [...] }`.
 

@@ -1,5 +1,5 @@
 import { DurableObject } from 'cloudflare:workers';
-import { formatAmount, Ledger, migrateSql, SqlStorageRepository, ValidationError } from 'pluts';
+import { formatAmount, Ledger, migrate, SqlStorageRepository, ValidationError } from 'pluts';
 import { seed } from './seed';
 import type { CreateAccountInput, EntryInput } from 'pluts';
 
@@ -8,7 +8,7 @@ import type { CreateAccountInput, EntryInput } from 'pluts';
  * embedded SQLite database (`ctx.storage.sql`).
  *
  * The DO routes the Pluts JSON REST surface (ported from `pluts/worker`) and
- * self-provisions its schema in the constructor via the `migrateSql()` exported
+ * self-provisions its schema in the constructor via the `migrate()` exported
  * by the `pluts` dependency. There is no separate D1 binding — the DO's private
  * SQLite storage (declared via `new_sqlite_classes` in `wrangler.jsonc`) is the
  * ledger. One DO instance = one isolated ledger.
@@ -34,7 +34,7 @@ export class PlutsLedgerDO extends DurableObject<Env> {
 	constructor(ctx: DurableObjectState, env: Env) {
 		super(ctx, env);
 		ctx.blockConcurrencyWhile(() => {
-			migrateSql(ctx.storage.sql);
+			migrate(ctx.storage.sql);
 			return Promise.resolve();
 		});
 	}

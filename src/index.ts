@@ -82,20 +82,7 @@ export class PlutsLedgerDO extends DurableObject<Env> {
 
       if (request.method === "GET" && url.pathname === "/entries") {
         const entries = await ledger.allEntries("desc");
-        const withAmounts = await Promise.all(
-          entries.map(async (e) => ({
-            ...e,
-            debitAmounts: e.debitAmounts.map(async (d) => ({
-              ...d,
-              amount: d.amount.toMajor(),
-            })),
-            creditAmounts: e.creditAmounts.map(async (c) => ({
-              ...c,
-              amount: c.amount.toMajor(),
-            })),
-          })),
-        );
-        return Response.json(withAmounts);
+        return Response.json(entries);
       }
 
       if (request.method === "GET" && url.pathname === "/trial-balance") {

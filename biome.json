@@ -10,13 +10,11 @@
   },
   "formatter": {
     "enabled": true,
-    "indentStyle": "space"
+    "indentStyle": "space",
+    "indentWidth": 2
   },
   "linter": {
-    "enabled": true,
-    "rules": {
-      "preset": "recommended"
-    }
+    "enabled": true
   },
   "javascript": {
     "formatter": {

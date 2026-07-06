@@ -1,11 +1,10 @@
+import { cloudflareTest } from "@cloudflare/vitest-pool-workers";
 import { defineConfig } from "vitest/config";
 
 export default defineConfig({
-  test: {
-    globals: true,
-    environment: "node",
-    include: ["test/**/*.spec.ts"],
-    testTimeout: 30000,
-    hookTimeout: 30000,
-  },
+	plugins: [
+		cloudflareTest({
+			wrangler: { configPath: "./wrangler.jsonc" },
+		}),
+	],
 });

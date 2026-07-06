@@ -50,6 +50,17 @@ export class PlutsLedgerDO extends DurableObject<Env> {
     return new Ledger(new SqlStorageRepository(this.ctx.storage));
   }
 
+  /**
+   * Internal method to seed test data for tests. Not exposed to the public API.
+   * Idempotent: duplicate accounts are skipped and entries reuse their
+   * idempotency keys, so re-running `POST /seed` is a no-op.
+   * @returns {Promise<void>}
+   */
+  async __testSeedData(): Promise<void> {
+    const ledger = this.ledger();
+    await seed(ledger);
+  }
+
   async fetch(request: Request): Promise<Response> {
     const ledger = this.ledger();
     const url = new URL(request.url);

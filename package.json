@@ -1,19 +1,23 @@
 {
   "name": "pluts-ledger-do",
   "version": "0.1.0",
+  "description": "An example TypeScript Cloudflare Durable Object implementation of the Pluts double entry accounting library.",
+  "type": "module",
   "license": "MIT",
   "scripts": {
     "deploy": "wrangler deploy",
     "dev": "wrangler dev",
     "start": "wrangler dev",
     "test": "vitest run",
+    "test:watch": "vitest",
     "cf-typegen": "wrangler types",
-    "typecheck": "tsc --noEmit",
-    "lint": "biome check src",
-    "format": "biome format --write src"
+    "lint": "biome check src test",
+    "format": "biome format --write src test",
+    "typecheck": "tsc --noEmit"
   },
   "devDependencies": {
     "@biomejs/biome": "2.5.2",
+    "@cloudflare/vitest-pool-workers": "^0.18.0",
     "@cloudflare/workers-types": "^4.20260702.1",
     "typescript": "^6.0.3",
     "vitest": "^4.1.10",

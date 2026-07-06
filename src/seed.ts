@@ -22,7 +22,7 @@ interface SeedEntry {
 
 // Harbor Goods — a small retail store's opening month. Each entry is a plausible
 // real-world transaction; debits always equal credits.
-const SEED_ACCOUNTS: SeedAccount[] = [
+export const SEED_ACCOUNTS: SeedAccount[] = [
   { name: "Cash", type: "Asset" },
   { name: "Checking Account", type: "Asset" },
   { name: "Inventory", type: "Asset" },
@@ -40,7 +40,7 @@ const SEED_ACCOUNTS: SeedAccount[] = [
   { name: "Utilities Expense", type: "Expense" },
 ];
 
-const SEED_ENTRIES: SeedEntry[] = [
+export const SEED_ENTRIES: SeedEntry[] = [
   {
     idempotencyKey: "seed-01-capital",
     description: "Owner invests opening capital into the business",
@@ -120,7 +120,7 @@ const SEED_ENTRIES: SeedEntry[] = [
 ];
 
 /**
- * Seed the Harbor Goods demo data (ported from `pluts/scripts/seed-demo.ts`).
+ * Seed the Harbor Goods demo data
  * Idempotent: duplicate accounts are skipped and entries reuse their
  * idempotency keys, so re-running `POST /seed` is a no-op.
  */

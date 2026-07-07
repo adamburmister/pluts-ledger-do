@@ -69,6 +69,20 @@ describe("Pluts Ledger DO Worker RPC methods", () => {
     });
   });
 
+  it("exposes getEntry returning a clean entry with no HATEOAS links", async () => {
+    const entries = await stub.listEntries();
+    const entry = await stub.getEntry(entries[0].id);
+
+    expect(entry).toStrictEqual(entries[0]);
+    expect(entry).not.toHaveProperty("links");
+    expect(entry.debitAmounts[0]).not.toHaveProperty("links");
+    expect(entry.debitAmounts[0].account).not.toHaveProperty("links");
+  });
+
+  it("returns null from getEntry for a missing entry", async () => {
+    expect(await stub.getEntry("does-not-exist")).toBeNull();
+  });
+
   it("exposes account-specific ledger queries", async () => {
     const accounts = await stub.listAccounts();
     const payable = accounts.find(

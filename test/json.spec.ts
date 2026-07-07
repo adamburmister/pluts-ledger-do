@@ -44,9 +44,11 @@ describe("Pluts Ledger DO Worker HTTP JSON API", () => {
             type: "Expense",
             contra: false,
             createdAt: expect.any(String),
+            links: expect.any(Array),
           },
           amount: "2500.00",
           entryId: expect.any(String),
+          links: expect.any(Array),
         },
       ],
       creditAmounts: [
@@ -59,12 +61,17 @@ describe("Pluts Ledger DO Worker HTTP JSON API", () => {
             type: "Asset",
             contra: false,
             createdAt: expect.any(String),
+            links: expect.any(Array),
           },
           amount: "2500.00",
           entryId: expect.any(String),
+          links: expect.any(Array),
         },
       ],
       postedAt: expect.any(String),
+      links: [
+        { rel: "self", href: expect.stringMatching(/^\/entries\//), method: "GET" },
+      ],
     });
   });
 
@@ -80,12 +87,49 @@ describe("Pluts Ledger DO Worker HTTP JSON API", () => {
       contra: false,
       createdAt: expect.any(String),
       balance: "4000.00",
+      links: [
+        { rel: "self", href: expect.stringMatching(/^\/accounts\//), method: "GET" },
+        { rel: "balance", href: expect.stringMatching(/\/balance$/), method: "GET" },
+        { rel: "entries", href: expect.stringMatching(/\/entries$/), method: "GET" },
+        { rel: "amounts", href: expect.stringMatching(/\/amounts$/), method: "GET" },
+      ],
     });
   });
 
   it("404s when an account is not found", async () => {
     const response = await exports.default.fetch(
       "http://example.com/accounts/does-not-exist",
+    );
+    expect(response.status).toBe(404);
+    expect(await response.text()).toBe("Not Found");
+  });
+
+  it("GETs a single entry by id with a `self` link", async () => {
+    const entries = await stub.listEntries();
+    const entryId = entries[0].id;
+
+    const response = await exports.default.fetch(
+      `http://example.com/entries/${entryId}`,
+    );
+    expect(response.status).toBe(200);
+    const data = await response.json();
+    expect(data.id).toBe(entryId);
+    expect(data.links).toContainEqual({
+      rel: "self",
+      href: `/entries/${entryId}`,
+      method: "GET",
+    });
+    expect(data.debitAmounts[0].links).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ rel: "account" }),
+        expect.objectContaining({ rel: "entry" }),
+      ]),
+    );
+  });
+
+  it("404s when an entry is not found", async () => {
+    const response = await exports.default.fetch(
+      "http://example.com/entries/does-not-exist",
     );
     expect(response.status).toBe(404);
     expect(await response.text()).toBe("Not Found");
@@ -106,6 +150,14 @@ describe("Pluts Ledger DO Worker HTTP JSON API", () => {
     expect(balanceResponse.status).toBe(200);
     expect(await balanceResponse.json()).toStrictEqual({
       balance: "4000.00",
+      links: [
+        {
+          rel: "self",
+          href: `/accounts/${accountId}/balance`,
+          method: "GET",
+        },
+        { rel: "account", href: `/accounts/${accountId}`, method: "GET" },
+      ],
     });
 
     const entriesResponse = await exports.default.fetch(

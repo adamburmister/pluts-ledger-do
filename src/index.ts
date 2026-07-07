@@ -9,6 +9,15 @@ import {
   SqlStorageRepository,
   ValidationError,
 } from "pluts";
+import {
+  linkAccount,
+  linkAmountLine,
+  linkBalance,
+  linkBalanceSheet,
+  linkEntry,
+  linkIncomeStatement,
+  linkTrialBalance,
+} from "./links";
 import { seed } from "./seed";
 import {
   serializeAccount,
@@ -38,6 +47,7 @@ import {
  *   GET  /accounts/:id/amounts       list amount lines for an account
  *   POST /entries                    post a balanced entry
  *   GET  /entries                    list entries (newest first)
+ *   GET  /entries/:id                fetch a single entry
  *   GET  /trial-balance              get the trial balance
  *   GET  /balance-sheet              get the balance sheet summary
  *   GET  /income-statement           get the income statement summary
@@ -130,6 +140,15 @@ export class PlutsLedgerDO extends DurableObject<Env> {
     return entries.map((entry) => serializeEntry(entry));
   }
 
+  async getEntry(entryId: string) {
+    // The Ledger domain class does not expose entry-by-id, but the repository
+    // does and returns the same fully-hydrated Entry as `allEntries`.
+    const entry = await new SqlStorageRepository(this.ctx.storage).getEntry(
+      entryId,
+    );
+    return entry ? serializeEntry(entry) : null;
+  }
+
   async getTrialBalance() {
     const ledger = this.ledger();
     return {
@@ -176,9 +195,11 @@ export class PlutsLedgerDO extends DurableObject<Env> {
 
     router
       .post("/accounts", async (request) =>
-        Response.json(await this.createAccount(await request.json())),
+        Response.json(linkAccount(await this.createAccount(await request.json()))),
       )
-      .get("/accounts", async () => Response.json(await this.listAccounts()))
+      .get("/accounts", async () =>
+        Response.json((await this.listAccounts()).map(linkAccount)),
+      )
       .get("/accounts/:id/balance", async (request) => {
         const accountId = request.params.id;
         if (!accountId) {
@@ -188,7 +209,7 @@ export class PlutsLedgerDO extends DurableObject<Env> {
         if (!accountBalance) {
           return new Response("Not Found", { status: 404 });
         }
-        return Response.json(accountBalance);
+        return Response.json(linkBalance(accountId, accountBalance));
       })
       .get("/accounts/:id/entries", async (request) => {
         const accountId = request.params.id;
@@ -199,7 +220,7 @@ export class PlutsLedgerDO extends DurableObject<Env> {
         if (!accountEntries) {
           return new Response("Not Found", { status: 404 });
         }
-        return Response.json(accountEntries);
+        return Response.json(accountEntries.map(linkEntry));
       })
       .get("/accounts/:id/amounts", async (request) => {
         const accountId = request.params.id;
@@ -210,7 +231,7 @@ export class PlutsLedgerDO extends DurableObject<Env> {
         if (!accountAmounts) {
           return new Response("Not Found", { status: 404 });
         }
-        return Response.json(accountAmounts);
+        return Response.json(accountAmounts.map(linkAmountLine));
       })
       .get("/accounts/:id", async (request) => {
         const accountId = request.params.id;
@@ -221,20 +242,33 @@ export class PlutsLedgerDO extends DurableObject<Env> {
         if (!account) {
           return new Response("Not Found", { status: 404 });
         }
-        return Response.json(account);
+        return Response.json(linkAccount(account));
       })
       .post("/entries", async (request) =>
-        Response.json(await this.postEntry(await request.json())),
+        Response.json(linkEntry(await this.postEntry(await request.json()))),
       )
-      .get("/entries", async () => Response.json(await this.listEntries()))
+      .get("/entries", async () =>
+        Response.json((await this.listEntries()).map(linkEntry)),
+      )
+      .get("/entries/:id", async (request) => {
+        const entryId = request.params.id;
+        if (!entryId) {
+          return new Response("Not Found", { status: 404 });
+        }
+        const entry = await this.getEntry(entryId);
+        if (!entry) {
+          return new Response("Not Found", { status: 404 });
+        }
+        return Response.json(linkEntry(entry));
+      })
       .get("/trial-balance", async () =>
-        Response.json(await this.getTrialBalance()),
+        Response.json(linkTrialBalance(await this.getTrialBalance())),
       )
       .get("/balance-sheet", async () =>
-        Response.json(await this.getBalanceSheet()),
+        Response.json(linkBalanceSheet(await this.getBalanceSheet())),
       )
       .get("/income-statement", async () =>
-        Response.json(await this.getIncomeStatement()),
+        Response.json(linkIncomeStatement(await this.getIncomeStatement())),
       )
       .post("/seed", async () => Response.json(await this.seedLedger()))
       .post("/clear", async () => Response.json(await this.clearLedger()))

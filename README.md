@@ -33,15 +33,17 @@ HTTP request -> Worker -> PlutsLedgerDO("ledgerId") -> DO SQLite storage
 | `POST` | `/accounts` | Create an account |
 | `GET`  | `/accounts` | List accounts with balances |
 | `GET`  | `/accounts/:id` | Get an account by id |
-| `GET`  | `/accounts/:id?view=balance` | Get the balance for an account |
-| `GET`  | `/accounts/:id?view=entries` | Get journal entries that affected an account |
-| `GET`  | `/accounts/:id?view=amounts` | Get debit/credit line items for an account |
+| `GET`  | `/accounts/:id/balance` | Get the balance for an account |
+| `GET`  | `/accounts/:id/entries` | Get journal entries that affected an account |
+| `GET`  | `/accounts/:id/amounts` | Get debit/credit line items for an account |
 | `POST` | `/entries` | Post a balanced journal entry |
 | `GET`  | `/entries` | List entries, newest first |
+| `GET`  | `/entries/:id` | Get an entry by id |
 | `GET`  | `/trial-balance` | Return the current trial balance |
 | `GET`  | `/balance-sheet` | Return the current balance sheet summary |
 | `GET`  | `/income-statement` | Return the current income statement summary |
 | `POST` | `/seed` | Seed the Harbor Goods demo ledger |
+| `POST` | `/clear` | Clear all ledger data (reset) |
 
 Validation errors return `400` with `{ "error": "...", "issues": [...] }`.
 
@@ -57,10 +59,12 @@ The Durable Object also exposes RPC methods for the same capabilities, which is 
 - `getAccountAmounts(id)`
 - `postEntry(input)`
 - `listEntries()`
+- `getEntry(id)`
 - `getTrialBalance()`
 - `getBalanceSheet()`
 - `getIncomeStatement()`
 - `seedLedger()`
+- `clearLedger()`
 
 ## Getting Started
 

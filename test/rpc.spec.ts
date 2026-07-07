@@ -1,17 +1,13 @@
 import { env } from "cloudflare:workers";
-import { describe, it, expect, beforeAll, beforeEach } from "vitest";
+import { beforeAll, describe, expect, it } from "vitest";
 
 describe("Pluts Ledger DO Worker RPC methods", () => {
+  let stub: DurableObjectStub;
+
   beforeAll(async () => {
     const id = env.PLUTS_LEDGER_DO.idFromName("ledger");
-    const stub = env.PLUTS_LEDGER_DO.get(id);
-    await stub.__testSeedData();
-  });
-
-  let stub: DurableObjectStub;
-  beforeEach(() => {
-    const id = env.PLUTS_LEDGER_DO.idFromName("ledger");
     stub = env.PLUTS_LEDGER_DO.get(id);
+    await stub.__testSeedData();
   });
 
   it("exposes getTrialBalance", async () => {

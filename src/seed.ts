@@ -1,5 +1,5 @@
+import type { CreateAccountInput, EntryInput, Ledger } from "pluts";
 import { ValidationError } from "pluts";
-import type { Ledger, CreateAccountInput, EntryInput } from "pluts";
 
 interface SeedAccount {
   name: string;

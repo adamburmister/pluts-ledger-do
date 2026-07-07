@@ -24,6 +24,7 @@
     "wrangler": "^4.107.0"
   },
   "dependencies": {
+    "itty-router": "^5.0.0",
     "node-addon-api": "^8.9.0",
     "node-gyp": "^13.0.1",
     "pluts": "github:adamburmister/pluts#main",

@@ -1,43 +1,20 @@
 import { DurableObject } from "cloudflare:workers";
+import { AutoRouter } from "itty-router";
 import {
+  createAccountSchema,
+  entryInputSchema,
   formatAmount,
   Ledger,
   migrate,
   SqlStorageRepository,
   ValidationError,
-  createAccountSchema,
-  entryInputSchema,
-  type Account,
-  type AmountRecord,
-  type Entry,
 } from "pluts";
 import { seed } from "./seed";
-
-interface SerializableAccount {
-  id: string;
-  name: string;
-  type: string;
-  contra: boolean;
-  createdAt: string;
-  balance?: string;
-}
-
-interface SerializableAmountLine {
-  id: string;
-  kind: "debit" | "credit";
-  account: SerializableAccount;
-  amount: string;
-  entryId: string;
-}
-
-interface SerializableEntry {
-  id: string;
-  description: string;
-  date: string;
-  debitAmounts: SerializableAmountLine[];
-  creditAmounts: SerializableAmountLine[];
-  postedAt: string;
-}
+import {
+  serializeAccount,
+  serializeAmountLine,
+  serializeEntry,
+} from "./serializer";
 
 /**
  * Ledger Durable Object — a single-writer coordinator backed by its own
@@ -83,58 +60,16 @@ export class PlutsLedgerDO extends DurableObject<Env> {
     return new Ledger(new SqlStorageRepository(this.ctx.storage));
   }
 
-  /**
-   * Durable Object RPC can only transmit plain, structured data. These helpers
-   * keep the rich pluts domain objects inside the DO and map them to small
-   * JSON-safe DTOs before returning them to callers.
-   */
-  private serializeAccount(account: Account): SerializableAccount {
-    return {
-      id: account.id,
-      name: account.name,
-      type: account.type,
-      contra: account.contra,
-      createdAt: account.createdAt,
-    };
-  }
-
-  private serializeAmountLine(
-    amountLine: AmountRecord,
-  ): SerializableAmountLine {
-    return {
-      id: amountLine.id,
-      kind: amountLine.kind,
-      account: this.serializeAccount(amountLine.account),
-      amount: amountLine.amount.toMajor(),
-      entryId: amountLine.entryId,
-    };
-  }
-
-  private serializeEntry(entry: Entry): SerializableEntry {
-    return {
-      id: entry.id,
-      description: entry.description,
-      date: entry.date,
-      debitAmounts: entry.debitAmounts.map((amountLine) =>
-        this.serializeAmountLine(amountLine),
-      ),
-      creditAmounts: entry.creditAmounts.map((amountLine) =>
-        this.serializeAmountLine(amountLine),
-      ),
-      postedAt: entry.postedAt,
-    };
-  }
-
   async createAccount(accountData: unknown) {
     const created = await this.ledger().createAccount(
       createAccountSchema.parse(accountData),
     );
-    return this.serializeAccount(created);
+    return serializeAccount(created);
   }
 
   async getAccount(accountId: string) {
     const account = await this.ledger().getAccount(accountId);
-    return account ? this.serializeAccount(account) : null;
+    return account ? serializeAccount(account) : null;
   }
 
   async listAccounts() {
@@ -142,7 +77,7 @@ export class PlutsLedgerDO extends DurableObject<Env> {
     const accounts = await ledger.allAccounts();
     return Promise.all(
       accounts.map(async (account) => ({
-        ...this.serializeAccount(account),
+        ...serializeAccount(account),
         balance: formatAmount(await ledger.accountBalance(account)),
       })),
     );
@@ -152,7 +87,7 @@ export class PlutsLedgerDO extends DurableObject<Env> {
     const created = await this.ledger().postEntry(
       entryInputSchema.parse(entryData),
     );
-    return this.serializeEntry(created);
+    return serializeEntry(created);
   }
 
   async getAccountBalance(accountId: string) {
@@ -169,7 +104,7 @@ export class PlutsLedgerDO extends DurableObject<Env> {
     const account = await ledger.getAccount(accountId);
     if (!account) return [];
     const entries = await ledger.entriesForAccount(account);
-    return entries.map((entry) => this.serializeEntry(entry));
+    return entries.map((entry) => serializeEntry(entry));
   }
 
   async getAccountAmounts(accountId: string) {
@@ -178,14 +113,14 @@ export class PlutsLedgerDO extends DurableObject<Env> {
     if (!account) return [];
     const amounts = await ledger.amountsForAccount(account);
     return amounts.map((amountLine) => ({
-      ...this.serializeAmountLine(amountLine),
-      account: this.serializeAccount(amountLine.account),
+      ...serializeAmountLine(amountLine),
+      account: serializeAccount(amountLine.account),
     }));
   }
 
   async listEntries() {
     const entries = await this.ledger().allEntries("desc");
-    return entries.map((entry) => this.serializeEntry(entry));
+    return entries.map((entry) => serializeEntry(entry));
   }
 
   async getTrialBalance() {
@@ -235,63 +170,63 @@ export class PlutsLedgerDO extends DurableObject<Env> {
   }
 
   async fetch(request: Request): Promise<Response> {
-    const url = new URL(request.url);
+    const router = AutoRouter();
 
-    try {
-      if (request.method === "POST" && url.pathname === "/accounts") {
-        return Response.json(await this.createAccount(await request.json()));
-      }
-
-      if (request.method === "GET" && url.pathname === "/accounts") {
-        return Response.json(await this.listAccounts());
-      }
-
-      if (request.method === "GET" && /^\/accounts\/(.+)$/.test(url.pathname)) {
-        const accountId = url.pathname.split("/").pop();
+    router
+      .post("/accounts", async (request) =>
+        Response.json(await this.createAccount(await request.json())),
+      )
+      .get("/accounts", async () => Response.json(await this.listAccounts()))
+      .get("/accounts/:id/balance", async (request) => {
+        const accountId = request.params.id;
         if (!accountId) {
           return new Response("Not Found", { status: 404 });
         }
 
-        if (url.searchParams.get("view") === "balance") {
-          return Response.json(await this.getAccountBalance(accountId));
+        return Response.json(await this.getAccountBalance(accountId));
+      })
+      .get("/accounts/:id/entries", async (request) => {
+        const accountId = request.params.id;
+        if (!accountId) {
+          return new Response("Not Found", { status: 404 });
         }
 
-        if (url.searchParams.get("view") === "entries") {
-          return Response.json(await this.getAccountEntries(accountId));
+        return Response.json(await this.getAccountEntries(accountId));
+      })
+      .get("/accounts/:id/amounts", async (request) => {
+        const accountId = request.params.id;
+        if (!accountId) {
+          return new Response("Not Found", { status: 404 });
         }
 
-        if (url.searchParams.get("view") === "amounts") {
-          return Response.json(await this.getAccountAmounts(accountId));
+        return Response.json(await this.getAccountAmounts(accountId));
+      })
+      .get("/accounts/:id", async (request) => {
+        const accountId = request.params.id;
+        if (!accountId) {
+          return new Response("Not Found", { status: 404 });
         }
 
         return Response.json(await this.getAccount(accountId));
-      }
+      })
+      .post("/entries", async (request) =>
+        Response.json(await this.postEntry(await request.json())),
+      )
+      .get("/entries", async () => Response.json(await this.listEntries()))
+      .get("/trial-balance", async () =>
+        Response.json(await this.getTrialBalance()),
+      )
+      .get("/balance-sheet", async () =>
+        Response.json(await this.getBalanceSheet()),
+      )
+      .get("/income-statement", async () =>
+        Response.json(await this.getIncomeStatement()),
+      )
+      .post("/seed", async () => Response.json(await this.seedLedger()))
+      .all("*", () => new Response("Not Found", { status: 404 }));
 
-      if (request.method === "POST" && url.pathname === "/entries") {
-        return Response.json(await this.postEntry(await request.json()));
-      }
-
-      if (request.method === "GET" && url.pathname === "/entries") {
-        return Response.json(await this.listEntries());
-      }
-
-      if (request.method === "GET" && url.pathname === "/trial-balance") {
-        return Response.json(await this.getTrialBalance());
-      }
-
-      if (request.method === "GET" && url.pathname === "/balance-sheet") {
-        return Response.json(await this.getBalanceSheet());
-      }
-
-      if (request.method === "GET" && url.pathname === "/income-statement") {
-        return Response.json(await this.getIncomeStatement());
-      }
-
-      if (request.method === "POST" && url.pathname === "/seed") {
-        return Response.json(await this.seedLedger());
-      }
-
-      return new Response("Not Found", { status: 404 });
+    try {
+      return await router.fetch(request);
     } catch (e) {
       if (e instanceof ValidationError) {
         return Response.json(

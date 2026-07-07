@@ -1,10 +1,12 @@
 import { env, exports } from "cloudflare:workers";
-import { describe, it, expect, beforeAll } from "vitest";
+import { beforeAll, describe, expect, it } from "vitest";
 
 describe("Pluts Ledger DO Worker HTTP JSON API", () => {
+  let stub: DurableObjectStub;
+
   beforeAll(async () => {
     const id = env.PLUTS_LEDGER_DO.idFromName("ledger");
-    const stub = env.PLUTS_LEDGER_DO.get(id);
+    stub = env.PLUTS_LEDGER_DO.get(id);
     await stub.__testSeedData();
   });
 
@@ -79,5 +81,42 @@ describe("Pluts Ledger DO Worker HTTP JSON API", () => {
       createdAt: expect.any(String),
       balance: "4000.00",
     });
+  });
+
+  it("routes account detail subpaths", async () => {
+    const accounts = await stub.listAccounts();
+    const payable = accounts.find(
+      (account) => account.name === "Accounts Payable",
+    );
+
+    expect(payable).toBeDefined();
+
+    const balanceResponse = await exports.default.fetch(
+      `https://example.com/accounts/${payable.id}/balance`,
+    );
+    expect(balanceResponse.status).toBe(200);
+    expect(await balanceResponse.json()).toStrictEqual({
+      balance: "4000.00",
+    });
+
+    const entriesResponse = await exports.default.fetch(
+      `https://example.com/accounts/${payable.id}/entries`,
+    );
+    expect(entriesResponse.status).toBe(200);
+    expect(await entriesResponse.json()).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ id: expect.any(String) }),
+      ]),
+    );
+
+    const amountsResponse = await exports.default.fetch(
+      `https://example.com/accounts/${payable.id}/amounts`,
+    );
+    expect(amountsResponse.status).toBe(200);
+    expect(await amountsResponse.json()).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ id: expect.any(String) }),
+      ]),
+    );
   });
 });

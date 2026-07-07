@@ -166,16 +166,6 @@ export class PlutsLedgerDO extends DurableObject<Env> {
     return seed(this.ledger());
   }
 
-  /**
-   * Internal helper used by tests to seed the ledger data. It is not exposed
-   * as a public route, but it delegates to the same idempotent seeding logic
-   * as `POST /seed`.
-   * @returns {Promise<void>}
-   */
-  async __testSeedData(): Promise<void> {
-    await this.seedLedger();
-  }
-
   async fetch(request: Request): Promise<Response> {
     const router = AutoRouter();
 

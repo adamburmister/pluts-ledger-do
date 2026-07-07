@@ -7,7 +7,7 @@ describe("Pluts Ledger DO Worker RPC methods", () => {
   beforeAll(async () => {
     const id = env.PLUTS_LEDGER_DO.idFromName("ledger");
     stub = env.PLUTS_LEDGER_DO.get(id);
-    await stub.__testSeedData();
+    await stub.seedLedger();
   });
 
   it("exposes getTrialBalance", async () => {

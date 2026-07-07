@@ -72,4 +72,64 @@ describe("Pluts Ledger DO Worker RPC methods", () => {
       postedAt: expect.any(String),
     });
   });
+
+  it("exposes account-specific ledger queries", async () => {
+    const accounts = await stub.listAccounts();
+    const payable = accounts.find(
+      (account) => account.name === "Accounts Payable",
+    );
+
+    expect(payable).toBeDefined();
+
+    const account = await stub.getAccount(payable.id);
+    const balance = await stub.getAccountBalance(payable.id);
+    const entries = await stub.getAccountEntries(payable.id);
+    const amounts = await stub.getAccountAmounts(payable.id);
+
+    expect(account).toStrictEqual({
+      id: payable.id,
+      name: "Accounts Payable",
+      type: "Liability",
+      contra: false,
+      createdAt: expect.any(String),
+    });
+    expect(balance).toStrictEqual({ balance: "4000.00" });
+    expect(entries.length).toBeGreaterThan(0);
+    expect(amounts.length).toBeGreaterThan(0);
+    expect(amounts[0]).toStrictEqual({
+      id: expect.any(String),
+      kind: expect.any(String),
+      account: {
+        id: payable.id,
+        name: "Accounts Payable",
+        type: "Liability",
+        contra: false,
+        createdAt: expect.any(String),
+      },
+      amount: expect.any(String),
+      entryId: expect.any(String),
+    });
+  });
+
+  it("exposes balance sheet", async () => {
+    const balanceSheet = await stub.getBalanceSheet();
+
+    expect(balanceSheet).toStrictEqual({
+      assets: "50100.00",
+      liabilities: "4300.00",
+      equity: "50000.00",
+      netIncome: "-4200.00",
+      balanced: "0.00",
+    });
+  });
+
+  it("exposes income statement reporting", async () => {
+    const incomeStatement = await stub.getIncomeStatement();
+
+    expect(incomeStatement).toStrictEqual({
+      expenses: "7200.00",
+      netIncome: "-4200.00",
+      revenue: "3000.00",
+    });
+  });
 });

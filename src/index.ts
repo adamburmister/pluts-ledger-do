@@ -132,6 +132,11 @@ export class PlutsLedgerDO extends DurableObject<Env> {
     return this.serializeAccount(created);
   }
 
+  async getAccount(accountId: string) {
+    const account = await this.ledger().getAccount(accountId);
+    return account ? this.serializeAccount(account) : null;
+  }
+
   async listAccounts() {
     const ledger = this.ledger();
     const accounts = await ledger.allAccounts();
@@ -150,6 +155,34 @@ export class PlutsLedgerDO extends DurableObject<Env> {
     return this.serializeEntry(created);
   }
 
+  async getAccountBalance(accountId: string) {
+    const ledger = this.ledger();
+    const account = await ledger.getAccount(accountId);
+    if (!account) return null;
+    return {
+      balance: formatAmount(await ledger.accountBalance(account)),
+    };
+  }
+
+  async getAccountEntries(accountId: string) {
+    const ledger = this.ledger();
+    const account = await ledger.getAccount(accountId);
+    if (!account) return [];
+    const entries = await ledger.entriesForAccount(account);
+    return entries.map((entry) => this.serializeEntry(entry));
+  }
+
+  async getAccountAmounts(accountId: string) {
+    const ledger = this.ledger();
+    const account = await ledger.getAccount(accountId);
+    if (!account) return [];
+    const amounts = await ledger.amountsForAccount(account);
+    return amounts.map((amountLine) => ({
+      ...this.serializeAmountLine(amountLine),
+      account: this.serializeAccount(amountLine.account),
+    }));
+  }
+
   async listEntries() {
     const entries = await this.ledger().allEntries("desc");
     return entries.map((entry) => this.serializeEntry(entry));
@@ -159,6 +192,31 @@ export class PlutsLedgerDO extends DurableObject<Env> {
     const ledger = this.ledger();
     return {
       balance: formatAmount(await ledger.trialBalance()),
+    };
+  }
+
+  async getBalanceSheet() {
+    const ledger = this.ledger();
+    const [balanceSheet, incomeStatement] = await Promise.all([
+      ledger.balanceSheet(),
+      ledger.incomeStatement(),
+    ]);
+    return {
+      assets: formatAmount(balanceSheet.assets),
+      liabilities: formatAmount(balanceSheet.liabilities),
+      equity: formatAmount(balanceSheet.equity),
+      netIncome: formatAmount(incomeStatement.netIncome),
+      balanced: formatAmount(balanceSheet.balanced),
+    };
+  }
+
+  async getIncomeStatement() {
+    const ledger = this.ledger();
+    const incomeStatement = await ledger.incomeStatement();
+    return {
+      revenue: formatAmount(incomeStatement.revenue),
+      expenses: formatAmount(incomeStatement.expenses),
+      netIncome: formatAmount(incomeStatement.netIncome),
     };
   }
 
@@ -188,6 +246,27 @@ export class PlutsLedgerDO extends DurableObject<Env> {
         return Response.json(await this.listAccounts());
       }
 
+      if (request.method === "GET" && /^\/accounts\/(.+)$/.test(url.pathname)) {
+        const accountId = url.pathname.split("/").pop();
+        if (!accountId) {
+          return new Response("Not Found", { status: 404 });
+        }
+
+        if (url.searchParams.get("view") === "balance") {
+          return Response.json(await this.getAccountBalance(accountId));
+        }
+
+        if (url.searchParams.get("view") === "entries") {
+          return Response.json(await this.getAccountEntries(accountId));
+        }
+
+        if (url.searchParams.get("view") === "amounts") {
+          return Response.json(await this.getAccountAmounts(accountId));
+        }
+
+        return Response.json(await this.getAccount(accountId));
+      }
+
       if (request.method === "POST" && url.pathname === "/entries") {
         return Response.json(await this.postEntry(await request.json()));
       }
@@ -198,6 +277,14 @@ export class PlutsLedgerDO extends DurableObject<Env> {
 
       if (request.method === "GET" && url.pathname === "/trial-balance") {
         return Response.json(await this.getTrialBalance());
+      }
+
+      if (request.method === "GET" && url.pathname === "/balance-sheet") {
+        return Response.json(await this.getBalanceSheet());
+      }
+
+      if (request.method === "GET" && url.pathname === "/income-statement") {
+        return Response.json(await this.getIncomeStatement());
       }
 
       if (request.method === "POST" && url.pathname === "/seed") {

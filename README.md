@@ -10,6 +10,7 @@ The Durable Object owns its embedded SQLite database (making it easy to extend t
 
 - Double-entry bookkeeping with Asset, Liability, Equity, Revenue, and Expense accounts
 - Balanced journal entries with exact minor-unit amount storage
+- Methods for account lookups and views, account-ledger history, balance sheets, income statements
 - Durable Object SQLite persistence, with no separate D1 database required
 - Idempotent entry posting through optional `idempotencyKey` values
 - Demo seed data for a small retail business
@@ -27,16 +28,39 @@ HTTP request -> Worker -> PlutsLedgerDO("ledgerId") -> DO SQLite storage
 
 ## API
 
-| Method | Path             | Description                       |
-| ------ | ---------------- | --------------------------------- |
-| `POST` | `/accounts`      | Create an account                 |
-| `GET`  | `/accounts`      | List accounts with balances       |
-| `POST` | `/entries`       | Post a balanced journal entry     |
-| `GET`  | `/entries`       | List entries, newest first        |
-| `GET`  | `/trial-balance` | Return the current trial balance  |
-| `POST` | `/seed`          | Seed the Harbor Goods demo ledger |
+| Method | Path | Description |
+| ------ | ---- | ----------- |
+| `POST` | `/accounts` | Create an account |
+| `GET`  | `/accounts` | List accounts with balances |
+| `GET`  | `/accounts/:id` | Get an account by id |
+| `GET`  | `/accounts/:id?view=balance` | Get the balance for an account |
+| `GET`  | `/accounts/:id?view=entries` | Get journal entries that affected an account |
+| `GET`  | `/accounts/:id?view=amounts` | Get debit/credit line items for an account |
+| `POST` | `/entries` | Post a balanced journal entry |
+| `GET`  | `/entries` | List entries, newest first |
+| `GET`  | `/trial-balance` | Return the current trial balance |
+| `GET`  | `/balance-sheet` | Return the current balance sheet summary |
+| `GET`  | `/income-statement` | Return the current income statement summary |
+| `POST` | `/seed` | Seed the Harbor Goods demo ledger |
 
 Validation errors return `400` with `{ "error": "...", "issues": [...] }`.
+
+### Durable Object RPC methods
+
+The Durable Object also exposes RPC methods for the same capabilities, which is useful when calling it directly from Worker code or tests:
+
+- `createAccount(input)`
+- `listAccounts()`
+- `getAccount(id)`
+- `getAccountBalance(id)`
+- `getAccountEntries(id)`
+- `getAccountAmounts(id)`
+- `postEntry(input)`
+- `listEntries()`
+- `getTrialBalance()`
+- `getBalanceSheet()`
+- `getIncomeStatement()`
+- `seedLedger()`
 
 ## Getting Started
 

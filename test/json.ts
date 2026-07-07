@@ -1,7 +1,7 @@
 import { env, exports } from "cloudflare:workers";
 import { describe, it, expect, beforeAll } from "vitest";
 
-describe("Pluts Ledger DO Worker", () => {
+describe("Pluts Ledger DO Worker HTTP JSON API", () => {
   beforeAll(async () => {
     const id = env.PLUTS_LEDGER_DO.idFromName("ledger");
     const stub = env.PLUTS_LEDGER_DO.get(id);

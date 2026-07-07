@@ -7,8 +7,37 @@ import {
   ValidationError,
   createAccountSchema,
   entryInputSchema,
+  type Account,
+  type AmountRecord,
+  type Entry,
 } from "pluts";
 import { seed } from "./seed";
+
+interface SerializableAccount {
+  id: string;
+  name: string;
+  type: string;
+  contra: boolean;
+  createdAt: string;
+  balance?: string;
+}
+
+interface SerializableAmountLine {
+  id: string;
+  kind: "debit" | "credit";
+  account: SerializableAccount;
+  amount: string;
+  entryId: string;
+}
+
+interface SerializableEntry {
+  id: string;
+  description: string;
+  date: string;
+  debitAmounts: SerializableAmountLine[];
+  creditAmounts: SerializableAmountLine[];
+  postedAt: string;
+}
 
 /**
  * Ledger Durable Object — a single-writer coordinator backed by its own
@@ -46,8 +75,95 @@ export class PlutsLedgerDO extends DurableObject<Env> {
     });
   }
 
+  /**
+   * Convenience method to create a Ledger instance backed by this DO's private
+   * SQLite database. All ledger operations are routed through this instance.
+   */
   private ledger(): Ledger {
     return new Ledger(new SqlStorageRepository(this.ctx.storage));
+  }
+
+  /**
+   * Durable Object RPC can only transmit plain, structured data. These helpers
+   * keep the rich pluts domain objects inside the DO and map them to small
+   * JSON-safe DTOs before returning them to callers.
+   */
+  private serializeAccount(account: Account): SerializableAccount {
+    return {
+      id: account.id,
+      name: account.name,
+      type: account.type,
+      contra: account.contra,
+      createdAt: account.createdAt,
+    };
+  }
+
+  private serializeAmountLine(
+    amountLine: AmountRecord,
+  ): SerializableAmountLine {
+    return {
+      id: amountLine.id,
+      kind: amountLine.kind,
+      account: this.serializeAccount(amountLine.account),
+      amount: amountLine.amount.toMajor(),
+      entryId: amountLine.entryId,
+    };
+  }
+
+  private serializeEntry(entry: Entry): SerializableEntry {
+    return {
+      id: entry.id,
+      description: entry.description,
+      date: entry.date,
+      debitAmounts: entry.debitAmounts.map((amountLine) =>
+        this.serializeAmountLine(amountLine),
+      ),
+      creditAmounts: entry.creditAmounts.map((amountLine) =>
+        this.serializeAmountLine(amountLine),
+      ),
+      postedAt: entry.postedAt,
+    };
+  }
+
+  async createAccount(accountData: unknown) {
+    const created = await this.ledger().createAccount(
+      createAccountSchema.parse(accountData),
+    );
+    return this.serializeAccount(created);
+  }
+
+  async listAccounts() {
+    const ledger = this.ledger();
+    const accounts = await ledger.allAccounts();
+    return Promise.all(
+      accounts.map(async (account) => ({
+        ...this.serializeAccount(account),
+        balance: formatAmount(await ledger.accountBalance(account)),
+      })),
+    );
+  }
+
+  async postEntry(entryData: unknown) {
+    const created = await this.ledger().postEntry(
+      entryInputSchema.parse(entryData),
+    );
+    return this.serializeEntry(created);
+  }
+
+  async listEntries() {
+    const entries = await this.ledger().allEntries("desc");
+    return entries.map((entry) => this.serializeEntry(entry));
+  }
+
+  async getTrialBalance() {
+    const ledger = this.ledger();
+    return {
+      balance: formatAmount(await ledger.trialBalance()),
+    };
+  }
+
+  async seedLedger() {
+    return seed(this.ledger());
   }
 
   /**
@@ -57,53 +173,35 @@ export class PlutsLedgerDO extends DurableObject<Env> {
    * @returns {Promise<void>}
    */
   async __testSeedData(): Promise<void> {
-    const ledger = this.ledger();
-    await seed(ledger);
+    await this.seedLedger();
   }
 
   async fetch(request: Request): Promise<Response> {
-    const ledger = this.ledger();
     const url = new URL(request.url);
 
     try {
       if (request.method === "POST" && url.pathname === "/accounts") {
-        const accountData = await createAccountSchema.parse(
-          await request.json(),
-        );
-        const account = await ledger.createAccount(accountData);
-        return Response.json(account);
+        return Response.json(await this.createAccount(await request.json()));
       }
 
       if (request.method === "GET" && url.pathname === "/accounts") {
-        const accounts = await ledger.allAccounts();
-        const withBalances = await Promise.all(
-          accounts.map(async (a) => ({
-            ...a,
-            balance: formatAmount(await ledger.accountBalance(a)),
-          })),
-        );
-        return Response.json(withBalances);
+        return Response.json(await this.listAccounts());
       }
 
       if (request.method === "POST" && url.pathname === "/entries") {
-        const entryData = await entryInputSchema.parse(await request.json());
-        const entry = await ledger.postEntry(entryData);
-        return Response.json(entry);
+        return Response.json(await this.postEntry(await request.json()));
       }
 
       if (request.method === "GET" && url.pathname === "/entries") {
-        const entries = await ledger.allEntries("desc");
-        return Response.json(entries);
+        return Response.json(await this.listEntries());
       }
 
       if (request.method === "GET" && url.pathname === "/trial-balance") {
-        return Response.json({
-          balance: formatAmount(await ledger.trialBalance()),
-        });
+        return Response.json(await this.getTrialBalance());
       }
 
       if (request.method === "POST" && url.pathname === "/seed") {
-        return Response.json(await seed(ledger));
+        return Response.json(await this.seedLedger());
       }
 
       return new Response("Not Found", { status: 404 });

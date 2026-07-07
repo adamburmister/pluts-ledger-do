@@ -97,36 +97,43 @@ export function linkBalance<T extends object>(
   };
 }
 
-/** Report link sets — each report links to itself and the sibling reports. */
+/**
+ * The three report resources. Each report's response links to itself (as
+ * `self`) and to the two sibling reports, so a client can hop between them.
+ */
+const REPORTS = [
+  { rel: "trial-balance", href: "/trial-balance" },
+  { rel: "balance-sheet", href: "/balance-sheet" },
+  { rel: "income-statement", href: "/income-statement" },
+] as const;
+
+type ReportRel = (typeof REPORTS)[number]["rel"];
+
+/**
+ * Decorate a report response with its link set: `self` first, then the sibling
+ * reports in table order. Driven by the single `REPORTS` table so the link
+ * shape can never drift between reports.
+ */
+function linkReport<T extends object>(self: ReportRel, payload: T): Linked<T> {
+  const links: Link[] = [
+    { rel: "self", href: `/${self}`, method: "GET" },
+    ...REPORTS.filter((report) => report.rel !== self).map((report) => ({
+      rel: report.rel,
+      href: report.href,
+      method: "GET",
+    })),
+  ];
+  return { ...payload, links };
+}
+
 export function linkTrialBalance<T extends object>(payload: T): Linked<T> {
-  return {
-    ...payload,
-    links: [
-      { rel: "self", href: `/trial-balance`, method: "GET" },
-      { rel: "balance-sheet", href: `/balance-sheet`, method: "GET" },
-      { rel: "income-statement", href: `/income-statement`, method: "GET" },
-    ],
-  };
+  return linkReport("trial-balance", payload);
 }
 
 export function linkBalanceSheet<T extends object>(payload: T): Linked<T> {
-  return {
-    ...payload,
-    links: [
-      { rel: "self", href: `/balance-sheet`, method: "GET" },
-      { rel: "trial-balance", href: `/trial-balance`, method: "GET" },
-      { rel: "income-statement", href: `/income-statement`, method: "GET" },
-    ],
-  };
+  return linkReport("balance-sheet", payload);
 }
 
 export function linkIncomeStatement<T extends object>(payload: T): Linked<T> {
-  return {
-    ...payload,
-    links: [
-      { rel: "self", href: `/income-statement`, method: "GET" },
-      { rel: "trial-balance", href: `/trial-balance`, method: "GET" },
-      { rel: "balance-sheet", href: `/balance-sheet`, method: "GET" },
-    ],
-  };
+  return linkReport("income-statement", payload);
 }

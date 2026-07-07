@@ -1,8 +1,8 @@
 import { DurableObject } from "cloudflare:workers";
 import { AutoRouter } from "itty-router";
 import {
-  createAccountSchema,
-  entryInputSchema,
+  type CreateAccountInput,
+  type EntryInput,
   formatAmount,
   Ledger,
   migrate,
@@ -78,8 +78,11 @@ export class PlutsLedgerDO extends DurableObject<Env> {
   }
 
   async createAccount(accountData: unknown) {
+    // Validation happens inside the domain layer, which throws a typed
+    // `ValidationError` (surfaced as HTTP 400 by the router's `catch`). Parsing
+    // here too would double-validate and leak a raw `ZodError` as a 500.
     const created = await this.ledger().createAccount(
-      createAccountSchema.parse(accountData),
+      accountData as CreateAccountInput,
     );
     return serializeAccount(created);
   }
@@ -101,9 +104,9 @@ export class PlutsLedgerDO extends DurableObject<Env> {
   }
 
   async postEntry(entryData: unknown) {
-    const created = await this.ledger().postEntry(
-      entryInputSchema.parse(entryData),
-    );
+    // See `createAccount`: let the domain layer validate and throw
+    // `ValidationError` rather than re-parsing here.
+    const created = await this.ledger().postEntry(entryData as EntryInput);
     return serializeEntry(created);
   }
 
@@ -191,7 +194,21 @@ export class PlutsLedgerDO extends DurableObject<Env> {
   }
 
   async fetch(request: Request): Promise<Response> {
-    const router = AutoRouter();
+    // `AutoRouter` ships a built-in `catch` that serializes any thrown error as
+    // HTTP 500. We override it so domain validation failures surface as 400
+    // with structured issues; only genuinely unexpected errors are 500.
+    const router = AutoRouter({
+      catch: (err: unknown) => {
+        if (err instanceof ValidationError) {
+          return Response.json(
+            { error: err.message, issues: err.issues },
+            { status: 400 },
+          );
+        }
+        const message = err instanceof Error ? err.message : String(err);
+        return Response.json({ error: message }, { status: 500 });
+      },
+    });
 
     router
       .post("/accounts", async (request) =>
@@ -274,27 +291,22 @@ export class PlutsLedgerDO extends DurableObject<Env> {
       .post("/clear", async () => Response.json(await this.clearLedger()))
       .all("*", () => new Response("Not Found", { status: 404 }));
 
-    try {
-      return await router.fetch(request);
-    } catch (e) {
-      if (e instanceof ValidationError) {
-        return Response.json(
-          { error: e.message, issues: e.issues },
-          { status: 400 },
-        );
-      }
-      const message = e instanceof Error ? e.message : String(e);
-      return Response.json({ error: message }, { status: 500 });
-    }
+    return router.fetch(request);
   }
 
   /**
    * Clear all storage associated with this Durable Object instance, including
    * the embedded SQLite database schema and rows and any key-value data.
    * This is useful for resetting the ledger during development.
+   *
+   * `deleteAll()` drops the schema tables, but `migrate()` normally runs only
+   * in the constructor — the live DO instance survives a clear, so we must
+   * re-provision the schema here. Otherwise every subsequent request on this
+   * instance would fail with `no such table` until the DO is evicted.
    */
   async clearDo(): Promise<void> {
     await this.ctx.storage.deleteAll();
+    migrate(this.ctx.storage.sql);
   }
 }
 

@@ -142,4 +142,17 @@ describe("Pluts Ledger DO Worker RPC methods", () => {
       revenue: "3000.00",
     });
   });
+
+  it("clearLedger re-provisions the schema so the DO keeps working", async () => {
+    expect(await stub.clearLedger()).toStrictEqual({ cleared: true });
+
+    // Before the fix, deleteAll() dropped the tables and migrate() only ran in
+    // the constructor, so this call threw "no such table". Now the schema is
+    // re-provisioned during clear, so the DO stays usable.
+    expect(await stub.listAccounts()).toStrictEqual([]);
+
+    const result = await stub.seedLedger();
+    expect(result).toStrictEqual({ accounts: 15, entries: 10 });
+    expect(await stub.getTrialBalance()).toStrictEqual({ balance: "0.00" });
+  });
 });

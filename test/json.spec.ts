@@ -83,16 +83,25 @@ describe("Pluts Ledger DO Worker HTTP JSON API", () => {
     });
   });
 
+  it("404s when an account is not found", async () => {
+    const response = await exports.default.fetch(
+      "http://example.com/accounts/does-not-exist",
+    );
+    expect(response.status).toBe(404);
+    expect(await response.text()).toBe("Not Found");
+  });
+
   it("routes account detail subpaths", async () => {
     const accounts = await stub.listAccounts();
     const payable = accounts.find(
       (account) => account.name === "Accounts Payable",
     );
+    const accountId = payable.id;
 
     expect(payable).toBeDefined();
 
     const balanceResponse = await exports.default.fetch(
-      `https://example.com/accounts/${payable.id}/balance`,
+      `https://example.com/accounts/${accountId}/balance`,
     );
     expect(balanceResponse.status).toBe(200);
     expect(await balanceResponse.json()).toStrictEqual({
@@ -100,7 +109,7 @@ describe("Pluts Ledger DO Worker HTTP JSON API", () => {
     });
 
     const entriesResponse = await exports.default.fetch(
-      `https://example.com/accounts/${payable.id}/entries`,
+      `https://example.com/accounts/${accountId}/entries`,
     );
     expect(entriesResponse.status).toBe(200);
     expect(await entriesResponse.json()).toEqual(
@@ -110,7 +119,7 @@ describe("Pluts Ledger DO Worker HTTP JSON API", () => {
     );
 
     const amountsResponse = await exports.default.fetch(
-      `https://example.com/accounts/${payable.id}/amounts`,
+      `https://example.com/accounts/${accountId}/amounts`,
     );
     expect(amountsResponse.status).toBe(200);
     expect(await amountsResponse.json()).toEqual(

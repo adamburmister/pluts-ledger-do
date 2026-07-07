@@ -109,7 +109,7 @@ export class PlutsLedgerDO extends DurableObject<Env> {
   async getAccountEntries(accountId: string) {
     const ledger = this.ledger();
     const account = await ledger.getAccount(accountId);
-    if (!account) return [];
+    if (!account) return null; // 404
     const entries = await ledger.entriesForAccount(account);
     return entries.map((entry) => serializeEntry(entry));
   }
@@ -117,7 +117,7 @@ export class PlutsLedgerDO extends DurableObject<Env> {
   async getAccountAmounts(accountId: string) {
     const ledger = this.ledger();
     const account = await ledger.getAccount(accountId);
-    if (!account) return [];
+    if (!account) return null;
     const amounts = await ledger.amountsForAccount(account);
     return amounts.map((amountLine) => ({
       ...serializeAmountLine(amountLine),
@@ -166,6 +166,11 @@ export class PlutsLedgerDO extends DurableObject<Env> {
     return seed(this.ledger());
   }
 
+  async clearLedger() {
+    await this.clearDo();
+    return { cleared: true };
+  }
+
   async fetch(request: Request): Promise<Response> {
     const router = AutoRouter();
 
@@ -179,32 +184,44 @@ export class PlutsLedgerDO extends DurableObject<Env> {
         if (!accountId) {
           return new Response("Not Found", { status: 404 });
         }
-
-        return Response.json(await this.getAccountBalance(accountId));
+        const accountBalance = await this.getAccountBalance(accountId);
+        if (!accountBalance) {
+          return new Response("Not Found", { status: 404 });
+        }
+        return Response.json(accountBalance);
       })
       .get("/accounts/:id/entries", async (request) => {
         const accountId = request.params.id;
         if (!accountId) {
           return new Response("Not Found", { status: 404 });
         }
-
-        return Response.json(await this.getAccountEntries(accountId));
+        const accountEntries = await this.getAccountEntries(accountId);
+        if (!accountEntries) {
+          return new Response("Not Found", { status: 404 });
+        }
+        return Response.json(accountEntries);
       })
       .get("/accounts/:id/amounts", async (request) => {
         const accountId = request.params.id;
         if (!accountId) {
           return new Response("Not Found", { status: 404 });
         }
-
-        return Response.json(await this.getAccountAmounts(accountId));
+        const accountAmounts = await this.getAccountAmounts(accountId);
+        if (!accountAmounts) {
+          return new Response("Not Found", { status: 404 });
+        }
+        return Response.json(accountAmounts);
       })
       .get("/accounts/:id", async (request) => {
         const accountId = request.params.id;
         if (!accountId) {
           return new Response("Not Found", { status: 404 });
         }
-
-        return Response.json(await this.getAccount(accountId));
+        const account = await this.getAccount(accountId);
+        if (!account) {
+          return new Response("Not Found", { status: 404 });
+        }
+        return Response.json(account);
       })
       .post("/entries", async (request) =>
         Response.json(await this.postEntry(await request.json())),
@@ -220,6 +237,7 @@ export class PlutsLedgerDO extends DurableObject<Env> {
         Response.json(await this.getIncomeStatement()),
       )
       .post("/seed", async () => Response.json(await this.seedLedger()))
+      .post("/clear", async () => Response.json(await this.clearLedger()))
       .all("*", () => new Response("Not Found", { status: 404 }));
 
     try {

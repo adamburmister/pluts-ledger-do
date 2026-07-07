@@ -20,29 +20,36 @@ import {
  * Ledger Durable Object — a single-writer coordinator backed by its own
  * embedded SQLite database (`ctx.storage.sql`).
  *
- * The DO routes the Pluts JSON REST surface (ported from `pluts/worker`) and
- * self-provisions its schema in the constructor via the `migrate()` exported
- * by the `pluts` dependency. There is no separate D1 binding — the DO's private
- * SQLite storage (declared via `new_sqlite_classes` in `wrangler.jsonc`) is the
- * ledger. One DO instance = one isolated ledger.
+ * The DO exposes the Pluts JSON REST surface and self-provisions its schema in
+ * the constructor via the `migrate()` export from the `pluts` dependency.
+ * There is no separate D1 binding for the ledger data; the DO's private SQLite
+ * storage (declared via `new_sqlite_classes` in `wrangler.jsonc`) is the
+ * backing store. One DO instance corresponds to one isolated ledger.
  *
- * All requests are routed to one DO instance named "ledger" — every write is
- * serialized through it, which is what makes the ledger safe under retries.
+ * Requests are routed through a single DO instance named "ledger", so writes
+ * are serialized through the same object and remain safe under retries.
  *
- * Routes (forwarded verbatim from the outer Worker):
- *   POST /accounts         create an account           { name, type, contra? }
- *   GET  /accounts         list accounts (with balances)
- *   POST /entries          post a balanced entry       { description, debits, credits, ... }
- *   GET  /entries          list entries (newest first)
- *   GET  /trial-balance    { balance }  (should be "0.00" for a balanced ledger)
- *   POST /seed             seed the Harbor Goods demo data (idempotent)
+ * Routes handled by this Durable Object:
+ *   POST /accounts                   create an account
+ *   GET  /accounts                   list accounts with balances
+ *   GET  /accounts/:id               fetch a single account
+ *   GET  /accounts/:id/balance       get an account balance
+ *   GET  /accounts/:id/entries       list entries for an account
+ *   GET  /accounts/:id/amounts       list amount lines for an account
+ *   POST /entries                    post a balanced entry
+ *   GET  /entries                    list entries (newest first)
+ *   GET  /trial-balance              get the trial balance
+ *   GET  /balance-sheet              get the balance sheet summary
+ *   GET  /income-statement           get the income statement summary
+ *   POST /seed                       seed the Harbor Goods demo data
  */
 export class PlutsLedgerDO extends DurableObject<Env> {
   /**
-   * Provision the schema before any request is served. `ctx.storage.sql` is
-   * synchronous, local SQLite, so running migrations here (under
-   * `blockConcurrencyWhile`) is the recommended DO pattern and avoids a
-   * per-request migration check. Idempotent — a warm DB is a no-op.
+   * Provision the schema before any request is served. The DO's private SQLite
+   * backing store is available synchronously through `ctx.storage.sql`, so
+   * running migrations here under `blockConcurrencyWhile` is the recommended
+   * pattern and avoids a per-request migration check. Re-running this on an
+   * existing database is a no-op.
    */
   constructor(ctx: DurableObjectState, env: Env) {
     super(ctx, env);
@@ -53,8 +60,8 @@ export class PlutsLedgerDO extends DurableObject<Env> {
   }
 
   /**
-   * Convenience method to create a Ledger instance backed by this DO's private
-   * SQLite database. All ledger operations are routed through this instance.
+   * Create a Ledger instance backed by this DO's private SQLite database.
+   * Every ledger operation in this class flows through this instance.
    */
   private ledger(): Ledger {
     return new Ledger(new SqlStorageRepository(this.ctx.storage));
@@ -160,9 +167,9 @@ export class PlutsLedgerDO extends DurableObject<Env> {
   }
 
   /**
-   * Internal method to seed test data for tests. Not exposed to the public API.
-   * Idempotent: duplicate accounts are skipped and entries reuse their
-   * idempotency keys, so re-running `POST /seed` is a no-op.
+   * Internal helper used by tests to seed the ledger data. It is not exposed
+   * as a public route, but it delegates to the same idempotent seeding logic
+   * as `POST /seed`.
    * @returns {Promise<void>}
    */
   async __testSeedData(): Promise<void> {
@@ -240,9 +247,9 @@ export class PlutsLedgerDO extends DurableObject<Env> {
   }
 
   /**
-   * Clears all storage associated with this Durable Object instance — the
-   * embedded SQLite database (schema + all rows) and any key-value data.
-   * Useful for resetting a ledger during development.
+   * Clear all storage associated with this Durable Object instance, including
+   * the embedded SQLite database schema and rows and any key-value data.
+   * This is useful for resetting the ledger during development.
    */
   async clearDo(): Promise<void> {
     await this.ctx.storage.deleteAll();
@@ -251,8 +258,9 @@ export class PlutsLedgerDO extends DurableObject<Env> {
 
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
-    // In practice you would probably use a per-tenant DO instance,
-    // but for this demo we just use a single DO named "ledger".
+    // This demo uses a single Durable Object instance named "ledger" for the
+    // entire worker. In a multi-tenant deployment, you would typically route
+    // requests to a per-tenant DO instance instead.
     const stub = env.PLUTS_LEDGER_DO.getByName("ledger");
     return stub.fetch(request);
   },

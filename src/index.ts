@@ -8,6 +8,9 @@ import {
   migrate,
   SqlStorageRepository,
   ValidationError,
+  toAccountDTO,
+  toEntryDTO,
+  toAmountLineDTO,
 } from "pluts";
 import {
   linkAccount,
@@ -19,11 +22,6 @@ import {
   linkTrialBalance,
 } from "./links";
 import { seed } from "./seed";
-import {
-  serializeAccount,
-  serializeAmountLine,
-  serializeEntry,
-} from "./serializer";
 
 /**
  * Ledger Durable Object — a single-writer coordinator backed by its own
@@ -84,12 +82,12 @@ export class PlutsLedgerDO extends DurableObject<Env> {
     const created = await this.ledger().createAccount(
       accountData as CreateAccountInput,
     );
-    return serializeAccount(created);
+    return toAccountDTO(created);
   }
 
   async getAccount(accountId: string) {
     const account = await this.ledger().getAccount(accountId);
-    return account ? serializeAccount(account) : null;
+    return account ? toAccountDTO(account) : null;
   }
 
   async listAccounts() {
@@ -97,7 +95,7 @@ export class PlutsLedgerDO extends DurableObject<Env> {
     const accounts = await ledger.allAccounts();
     return Promise.all(
       accounts.map(async (account) => ({
-        ...serializeAccount(account),
+        ...toAccountDTO(account),
         balance: formatAmount(await ledger.accountBalance(account)),
       })),
     );
@@ -107,7 +105,7 @@ export class PlutsLedgerDO extends DurableObject<Env> {
     // See `createAccount`: let the domain layer validate and throw
     // `ValidationError` rather than re-parsing here.
     const created = await this.ledger().postEntry(entryData as EntryInput);
-    return serializeEntry(created);
+    return toEntryDTO(created);
   }
 
   async getAccountBalance(accountId: string) {
@@ -124,7 +122,7 @@ export class PlutsLedgerDO extends DurableObject<Env> {
     const account = await ledger.getAccount(accountId);
     if (!account) return null; // 404
     const entries = await ledger.entriesForAccount(account);
-    return entries.map((entry) => serializeEntry(entry));
+    return entries.map((entry) => toEntryDTO(entry));
   }
 
   async getAccountAmounts(accountId: string) {
@@ -133,14 +131,14 @@ export class PlutsLedgerDO extends DurableObject<Env> {
     if (!account) return null;
     const amounts = await ledger.amountsForAccount(account);
     return amounts.map((amountLine) => ({
-      ...serializeAmountLine(amountLine),
-      account: serializeAccount(amountLine.account),
+      ...toAmountLineDTO(amountLine),
+      account: toAccountDTO(amountLine.account),
     }));
   }
 
   async listEntries() {
     const entries = await this.ledger().allEntries("desc");
-    return entries.map((entry) => serializeEntry(entry));
+    return entries.map((entry) => toEntryDTO(entry));
   }
 
   async getEntry(entryId: string) {
@@ -149,7 +147,7 @@ export class PlutsLedgerDO extends DurableObject<Env> {
     const entry = await new SqlStorageRepository(this.ctx.storage).getEntry(
       entryId,
     );
-    return entry ? serializeEntry(entry) : null;
+    return entry ? toEntryDTO(entry) : null;
   }
 
   async getTrialBalance() {
@@ -212,7 +210,9 @@ export class PlutsLedgerDO extends DurableObject<Env> {
 
     router
       .post("/accounts", async (request) =>
-        Response.json(linkAccount(await this.createAccount(await request.json()))),
+        Response.json(
+          linkAccount(await this.createAccount(await request.json())),
+        ),
       )
       .get("/accounts", async () =>
         Response.json((await this.listAccounts()).map(linkAccount)),
